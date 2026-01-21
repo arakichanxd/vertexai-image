@@ -47,6 +47,16 @@ A powerful, reverse-engineered API client for Z.AI's image generation platform, 
    # Session Token from image.z.ai cookies (Required)
    Z_IMAGE_SESSION=eyJhbGciOiJIUz...
 
+   # (Optional) Specific Cookies for fingerprinting/WAF
+   Z_COOKIE_WBKFRO=...       # _c_WBKFRo
+   Z_COOKIE_ACW_TC=...       # acw_tc
+   Z_COOKIE_C=...            # c
+   Z_COOKIE_SSXMOD=...       # ssxmod_itna
+   Z_COOKIE_SSXMOD2=...      # ssxmod_itna2
+
+   # (Optional) Custom User Agent
+   Z_USER_AGENT=Mozilla/5.0...
+
    # (Optional) Chat Token for auto-refresh
    # Z_CHAT_TOKEN=eyJhb...
 
@@ -105,6 +115,23 @@ curl http://localhost:3000/generate \
 ```
 
 **Supported Ratios:** `1:1`, `3:4`, `4:3`, `16:9`, `9:16`, `21:9`, `9:21`
+
+---
+
+## 🤖 Telegram Bot Integration
+
+Manage your cookies remotely without restarting the server!
+
+1. **Setup**:
+   - Talk to [@BotFather](https://t.me/BotFather) to create a new bot.
+   - Copy the Token.
+   - Add to `.env`: `TELEGRAM_BOT_TOKEN=your_token_here`
+
+2. **Usage**:
+   - `/start` - Welcome guide.
+   - `/status` - Check if session is valid and see loaded cookies.
+   - `/set <name> <value>` - Manually set a cookie (e.g., `/set _c_WBKFRo val...`).
+   - **Upload `cookies.txt`** - Send a Netscape-formatted cookie file to bulk import.
 
 ---
 

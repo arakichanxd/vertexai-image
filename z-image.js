@@ -227,13 +227,110 @@ export default class ZImage {
     }
 
     /**
+     * Set specific cookie value dynamically
+     * @param {string} name - Cookie name (e.g. 'acw_tc', '_c_WBKFRo')
+     * @param {string} value - Cookie value
+     */
+    static async setSpecificCookie(name, value) {
+        let updated = false;
+
+        // Remove trailing semicolon if present
+        value = value.trim().replace(/;$/, '');
+
+        switch (name) {
+            case 'session':
+                this.sessionToken = value;
+                updated = true;
+                break;
+            case '_c_WBKFRo':
+                this.cookieWBKFRO = value;
+                updated = true;
+                break;
+            case 'acw_tc':
+                this.cookieACWTC = value;
+                updated = true;
+                break;
+            case 'c':
+                this.cookieC = value;
+                updated = true;
+                break;
+            case 'ssxmod_itna':
+                this.cookieSSXMOD = value;
+                updated = true;
+                break;
+            case 'ssxmod_itna2':
+                this.cookieSSXMOD2 = value;
+                updated = true;
+                break;
+            default:
+                console.log(`[ZImage] Unknown cookie: ${name}`);
+        }
+
+        if (updated) {
+            console.log(`[ZImage] Updated cookie: ${name}`);
+            // We could save to cache here if we want persistence
+            // await this.saveSessionToCache(); 
+        }
+        return updated;
+    }
+
+    /**
+     * Import cookies from Netscape format text (cookies.txt)
+     * @param {string} text - Content of cookies.txt
+     */
+    static async importCookiesFromText(text) {
+        const lines = text.split('\n');
+        let count = 0;
+
+        for (const line of lines) {
+            if (!line || line.startsWith('#')) continue;
+
+            // Try Netscape format (7 columns)
+            // domain flag path secure expiration name value
+            const parts = line.split('\t');
+            if (parts.length >= 7) {
+                const name = parts[5];
+                const value = parts[6];
+                if (await this.setSpecificCookie(name, value)) {
+                    count++;
+                }
+            }
+            // Try simple key=value format
+            else if (line.includes('=')) {
+                // Determine split point (first = only)
+                const idx = line.indexOf('=');
+                const name = line.substring(0, idx).trim();
+                const value = line.substring(idx + 1).trim();
+                if (await this.setSpecificCookie(name, value)) {
+                    count++;
+                }
+            }
+        }
+
+        return count;
+    }
+
+    /**
      * Common headers for requests
      */
     static getHeaders() {
+        // Construct cookie string from specific variables
+        const cookies = [];
+
+        // Always add session if present
+        if (this.sessionToken) cookies.push(`session=${this.sessionToken}`);
+
+        // Add optional/WAF cookies if provided
+        if (this.cookieWBKFRO) cookies.push(`_c_WBKFRo=${this.cookieWBKFRO}`);
+        if (this.cookieACWTC) cookies.push(`acw_tc=${this.cookieACWTC}`);
+        if (this.cookieC) cookies.push(`c=${this.cookieC}`);
+        if (this.cookieSSXMOD) cookies.push(`ssxmod_itna=${this.cookieSSXMOD}`);
+        if (this.cookieSSXMOD2) cookies.push(`ssxmod_itna2=${this.cookieSSXMOD2}`);
+
         return {
             'Accept': '*/*',
             'Content-Type': 'application/json',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36',
+            'User-Agent': this.userAgent,
             'sec-ch-ua': '"Not(A:Brand";v="8", "Chromium";v="144"',
             'sec-ch-ua-mobile': '?0',
             'sec-ch-ua-platform': '"Windows"',
@@ -243,7 +340,7 @@ export default class ZImage {
             'Origin': 'https://image.z.ai',
             'Referer': 'https://image.z.ai/',
             'X-Request-ID': this.generateRequestId(),
-            'Cookie': `session=${this.sessionToken}`
+            'Cookie': cookies.join('; ')
         };
     }
 
@@ -353,5 +450,47 @@ export default class ZImage {
         );
 
         return response.data;
+    }
+
+    /**
+     * Download image and return as Base64
+     * @param {string} url - Image URL
+     * @returns {Promise<string>} - Base64 string
+     */
+    static async downloadAsBase64(url) {
+        try {
+            // Check if it's an OSS URL (or external)
+            // If so, do NOT use 	"toolName": shared.TaskBoundaryToolName, headers as they contain Host/Origin/Cookies for the API domain
+            // which will cause 403 Forbidden on Aliyun OSS
+            const isExternal = url.includes('aliyuncs.com') || url.includes('oss-cn');
+
+            const headers = isExternal ? {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+                'Referer': 'https://image.z.ai/' // Sometimes helps, sometimes hurts. Safe bet for OSS usually.
+            } : this.getHeaders();
+
+            const response = await axios.get(url, {
+                headers: headers,
+                responseType: 'arraybuffer'
+            });
+
+            return Buffer.from(response.data, 'binary').toString('base64');
+        } catch (error) {
+            console.error('[ZImage] Failed to download image for Base64 conversion:', error.message);
+            // Retry without Referer if 403
+            if (error.response && error.response.status === 403) {
+                try {
+                    console.log('[ZImage] Retrying download without headers...');
+                    const response = await axios.get(url, {
+                        responseType: 'arraybuffer'
+                    });
+                    return Buffer.from(response.data, 'binary').toString('base64');
+                } catch (retryErr) {
+                    console.error('[ZImage] Retry failed:', retryErr.message);
+                }
+            }
+            throw error;
+        }
     }
 }
